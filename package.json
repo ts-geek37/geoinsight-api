@@ -1,0 +1,43 @@
+{
+  "name": "geoinsight-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "migrate:create": "node ./node_modules/node-pg-migrate/bin/node-pg-migrate.js create -j ts --config migration.config.js",
+    "migrate:up": "ts-node ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --config migration.config.js",
+    "migrate:down": "ts-node ./node_modules/node-pg-migrate/bin/node-pg-migrate.js down --config migration.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/techstaunch/geoinsight-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/techstaunch/geoinsight-backend/issues"
+  },
+  "homepage": "https://github.com/techstaunch/geoinsight-backend#readme",
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "node-pg-migrate": "^8.0.3",
+    "pg": "^8.16.3"
+  }
+}
