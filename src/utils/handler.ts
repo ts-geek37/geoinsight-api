@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 
-export const handle = (fn: Function) => {
+export const handler = (fn: Function) => {
   return async (req: Request, res: Response) => {
     try {
       const result = await fn(req, res);

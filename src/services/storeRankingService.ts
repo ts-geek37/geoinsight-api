@@ -7,12 +7,7 @@ import {
   StoreAreaSummaryResponse,
 } from "../types";
 import { getNearestAreaProfile } from "./areaProfileService";
-import { cosineSimilarity } from "./similarity/cosine";
-import { buildFeatureVector } from "./similarity/featureBuilder";
-import {
-  computeNormalizationStats,
-  normalizeVector,
-} from "./similarity/normalization";
+import { buildFeatureVector, computeNormalizationStats, cosineSimilarity, normalizeVector } from "./similarity";
 
 const TOP_STORES = 20;
 const TOP_AREAS = 15;
@@ -96,10 +91,7 @@ const getTopStoresFromDb = async (): Promise<
 const getTopAreasForStore = async (
   store: Store
 ): Promise<{ baseArea: AreaProfile; areas: SimilarAreaResult[] }> => {
-  const baseArea = await getNearestAreaProfile(
-    store.latitude,
-    store.longitude
-  );
+  const baseArea = await getNearestAreaProfile(store.latitude, store.longitude);
 
   if (!baseArea) {
     return { baseArea: null as any, areas: [] };
@@ -135,10 +127,7 @@ const getTopAreasForStore = async (
   const baseVecRaw = buildFeatureVector(baseArea);
   const candidateVecsRaw = candidates.map(buildFeatureVector);
 
-  const stats = computeNormalizationStats([
-    baseVecRaw,
-    ...candidateVecsRaw,
-  ]);
+  const stats = computeNormalizationStats([baseVecRaw, ...candidateVecsRaw]);
   const baseVec = normalizeVector(baseVecRaw, stats);
 
   const areas: SimilarAreaResult[] = [];
@@ -148,8 +137,7 @@ const getTopAreasForStore = async (
     const vec = normalizeVector(candidateVecsRaw[i], stats);
 
     const sim01 = cosineSimilarity(baseVec, vec);
-    const similarityScore =
-      Math.round(sim01 * 100 * 100) / 100;
+    const similarityScore = Math.round(sim01 * 100 * 100) / 100;
 
     if (similarityScore < MIN_SIMILARITY) continue;
 
@@ -158,23 +146,13 @@ const getTopAreasForStore = async (
 
     const distanceKm = Number(area.distance_km ?? 0);
 
-    const populationFactor = Math.min(
-      population3km / IDEAL_POPULATION_3KM,
-      1
-    );
+    const populationFactor = Math.min(population3km / IDEAL_POPULATION_3KM, 1);
 
-    const distanceFactor = Math.min(
-      distanceKm / IDEAL_DISTANCE_KM,
-      1
-    );
+    const distanceFactor = Math.min(distanceKm / IDEAL_DISTANCE_KM, 1);
 
     const priorityScore =
-      Math.round(
-        similarityScore *
-          populationFactor *
-          distanceFactor *
-          100
-      ) / 100;
+      Math.round(similarityScore * populationFactor * distanceFactor * 100) /
+      100;
 
     areas.push({
       area,
@@ -198,8 +176,7 @@ export const getStoreAreaSummary =
     const results: StoreAreaSummaryItem[] = [];
 
     for (const store of stores) {
-      const { baseArea, areas } =
-        await getTopAreasForStore(store);
+      const { baseArea, areas } = await getTopAreasForStore(store);
 
       results.push({
         store: {

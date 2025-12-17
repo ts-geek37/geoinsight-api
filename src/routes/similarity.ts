@@ -4,11 +4,11 @@ import {
   similarityForStoreController,
   storeAreaSummaryController,
 } from "../controllers";
-import { handle } from "../utils";
+import { handler } from "../utils";
 
 const router = Router();
 
-router.get("/store/:storeId", handle(similarityForStoreController));
-router.get("/summary", handle(storeAreaSummaryController));
+router.get("/store/:storeId", handler(similarityForStoreController));
+router.get("/summary", handler(storeAreaSummaryController));
 
 export default router;
