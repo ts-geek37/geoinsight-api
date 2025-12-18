@@ -1,11 +1,77 @@
 import { query } from "../db";
-import { Sales, Store } from "../types";
+import {
+  Sales,
+  Store,
+  StoreDetailsDTO,
+  StoreMapItemDTO,
+  StoreMapResponseDTO,
+} from "../types";
+import { buildStoreAnalytics, formatINR } from "../utils";
 import { getNearestAreaProfile } from "./areaProfileService";
 import { getSalesAll } from "./salesService";
 
-export const getStores = async (): Promise<Store[]> => {
-  const result = await query(
-    `
+export const buildStoreMapResponse = (stores: Store[]): StoreMapResponseDTO => {
+  const items: StoreMapItemDTO[] = [];
+
+  for (const s of stores) {
+    if (!Array.isArray(s.yearly_revenue) || s.yearly_revenue.length === 0) {
+      continue;
+    }
+
+    const latest = s.yearly_revenue.reduce((a, b) => (a.year > b.year ? a : b));
+
+    items.push({
+      id: s.id,
+      name: s.name,
+      city: s.city,
+      state: s.state,
+      latitude: s.latitude,
+      longitude: s.longitude,
+      rfmScore: s.rfm_score,
+      rfmSegment: s.rfm_segment,
+      latestRevenue: latest.revenue_inr,
+      latestRevenueFormatted: formatINR(latest.revenue_inr),
+      heatmapWeight: s.rfm_score,
+    });
+  }
+
+  const states = [...new Set(items.map((s) => s.state))].sort();
+
+  const citiesByState: Record<string, string[]> = {};
+  for (const state of states) {
+    citiesByState[state] = [
+      ...new Set(items.filter((i) => i.state === state).map((i) => i.city)),
+    ].sort();
+  }
+
+  const revenues = items.map((i) => i.latestRevenue);
+  const revenueMin = revenues.length ? Math.min(...revenues) : 0;
+  const revenueMax = revenues.length ? Math.max(...revenues) : 0;
+
+  const segmentCounts = {
+    champion: items.filter((i) => i.rfmSegment.toLowerCase() === "champion")
+      .length,
+    promising: items.filter((i) => i.rfmSegment.toLowerCase() === "promising")
+      .length,
+    attention: items.filter((i) =>
+      i.rfmSegment.toLowerCase().includes("attention")
+    ).length,
+  };
+
+  return {
+    stores: items,
+    filters: {
+      states,
+      citiesByState,
+      revenueMin,
+      revenueMax,
+    },
+    segmentCounts,
+  };
+};
+
+export const getStoresRaw = async (): Promise<Store[]> => {
+  const result = await query(`
     SELECT 
       s.*,
       COALESCE(
@@ -37,15 +103,13 @@ export const getStores = async (): Promise<Store[]> => {
     ) ss ON ss.store_id = s.id
     GROUP BY s.id
     ORDER BY s.city, s.name
-    `
-  );
+  `);
 
   return result.rows.map((row) => ({
     ...row,
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
     rfm_score: Number(row.rfm_score),
-
     yearly_revenue: row.yearly_revenue.map((y: any) => ({
       year: Number(y.year),
       revenue_inr: Number(y.revenue_inr),
@@ -53,6 +117,11 @@ export const getStores = async (): Promise<Store[]> => {
       avg_ticket_size: Number(y.avg_ticket_size),
     })),
   }));
+};
+
+export const getStores = async (): Promise<StoreMapResponseDTO> => {
+  const stores = await getStoresRaw();
+  return buildStoreMapResponse(stores);
 };
 
 export const getStoreById = async (storeId: string): Promise<Store | null> => {
@@ -129,101 +198,26 @@ export const getStoreWithSales = async (
   return { storeId, sales: result, store };
 };
 
-// export const searchStores = async (searchText: string): Promise<Store[]> => {
-//   const like = `%${searchText}%`;
-//   console.log("like", like);
-//   const result = await query(
-//     `SELECT *
-//      FROM stores
-//      WHERE LOWER(name) LIKE LOWER($1)
-//         OR LOWER(city) LIKE LOWER($1)
-//         OR LOWER(state) LIKE LOWER($1)
-//         OR pincode LIKE $1
-//         OR address LIKE $1
-//      ORDER BY city, name`,
-//     [like]
-//   );
-//   console.log("res", result.rows);
-//   return result.rows as Store[];
-// };
+export const getStoreDetailsService = async (
+  storeId: string
+): Promise<StoreDetailsDTO | null> => {
+  const store = await getStoreById(storeId);
+  if (!store) return null;
 
-// export const createStore = async (store: Partial<Store>): Promise<Store> => {
-//   const result = await query(
-//     `INSERT INTO stores
-//      (store_id, name, address, city, state, pincode, latitude, longitude, store_type, size_sqft, opening_date)
-//      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-//      RETURNING *`,
-//     [
-//       store.store_id,
-//       store.name,
-//       store.address,
-//       store.city,
-//       store.state,
-//       store.pincode,
-//       store.latitude,
-//       store.longitude,
-//       store.store_type,
-//       store.size_sqft,
-//       store.opening_date,
-//     ]
-//   );
+  const sales = await getSalesAll(storeId);
+  if (!sales.length) return null;
 
-//   return result.rows[0] as Store;
-// };
+  const analytics = buildStoreAnalytics(store, sales);
 
-// export const updateStore = async (
-//   storeId: string,
-//   updated: Partial<Store>
-// ): Promise<Store | null> => {
-//   const result = await query(
-//     `UPDATE stores
-//      SET name = COALESCE($1, name),
-//          address = COALESCE($2, address),
-//          city = COALESCE($3, city),
-//          state = COALESCE($4, state),
-//          pincode = COALESCE($5, pincode),
-//          latitude = COALESCE($6, latitude),
-//          longitude = COALESCE($7, longitude),
-//          store_type = COALESCE($8, store_type),
-//          size_sqft = COALESCE($9, size_sqft),
-//          opening_date = COALESCE($10, opening_date)
-//      WHERE store_id = $11
-//      RETURNING *`,
-//     [
-//       updated.name,
-//       updated.address,
-//       updated.city,
-//       updated.state,
-//       updated.pincode,
-//       updated.latitude,
-//       updated.longitude,
-//       updated.store_type,
-//       updated.size_sqft,
-//       updated.opening_date,
-//       storeId,
-//     ]
-//   );
-
-//   if (!result.rows.length) return null;
-//   return result.rows[0] as Store;
-// };
-
-// export const deleteStore = async (storeId: string): Promise<boolean> => {
-//   const result = await query(`DELETE FROM stores WHERE store_id = $1`, [
-//     storeId,
-//   ]);
-//   return result.rowCount > 0;
-// };
-
-// export const getStoresByRFMSegment = async (
-//   segment: string
-// ): Promise<Store[]> => {
-//   const result = await query(
-//     `SELECT *
-//      FROM stores
-//      WHERE rfm_segment = $1`,
-//     [segment]
-//   );
-
-//   return result.rows as Store[];
-// };
+  return {
+    store: {
+      id: store.id,
+      name: store.name,
+      address: store.address,
+      latitude: store.latitude,
+      longitude: store.longitude,
+      rfmSegment: store.rfm_segment,
+    },
+    ...analytics,
+  };
+};

@@ -31,3 +31,37 @@ export interface SimilarStoreResult {
   baseArea: AreaProfile;
   similarAreas: SimilarAreaResult[];
 }
+
+export interface SimilarityResponseDTO {
+  store: {
+    id: string;
+    name: string;
+  };
+
+  baseArea: {
+    id: number;
+    name: string;
+  };
+
+  candidates: SimilarAreaDTO[];
+}
+
+export interface SimilarAreaDTO {
+  area: {
+    id: number;
+    name: string;
+    city: string;
+    latitude: number;
+    longitude: number;
+  };
+
+  similarityScore: number;
+
+  metrics: ComparisonMetricDTO[];
+}
+
+export interface ComparisonMetricDTO {
+  label: string;
+  store: string;
+  candidate: string;
+}

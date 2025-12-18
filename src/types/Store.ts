@@ -60,3 +60,94 @@ export type StoreAreaSummaryResponse = {
   generated_at: string;
   results: StoreAreaSummaryItem[];
 };
+
+export interface StoreDetailsDTO {
+  store: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    rfmSegment: string;
+  };
+
+  kpis: KPIItemDTO[];
+
+  revenueTrend: RevenueChartPointDTO[];
+
+  transactionsTrend: TransactionChartPointDTO[];
+
+  demographics: LabelValueDTO[];
+
+  poiSummary: PoiItemDTO[];
+}
+
+export interface KPIItemDTO {
+  title: string;
+  value: string;
+  subtitle?: string;
+  trend: {
+    value: number;
+    isPositive: boolean;
+  };
+}
+
+export interface RevenueChartPointDTO {
+  label: string;  
+  month: number;
+  year: number;
+  revenue: number;
+}
+
+export interface TransactionChartPointDTO {
+  label: string;
+  month: number;
+  year: number;
+  transactions: number;
+}
+
+export interface LabelValueDTO {
+  label: string;
+  value: string;
+}
+
+export interface PoiItemDTO {
+  label: string;
+  value: number; 
+}
+
+
+export interface StoreMapItemDTO {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+
+  latitude: number;
+  longitude: number;
+
+  rfmScore: number;
+  rfmSegment: string;
+
+  latestRevenue: number;
+  latestRevenueFormatted: string;
+
+  heatmapWeight: number;
+}
+
+export interface StoreMapResponseDTO {
+  stores: StoreMapItemDTO[];
+
+  filters: {
+    states: string[];
+    citiesByState: Record<string, string[]>;
+    revenueMin: number;
+    revenueMax: number;
+  };
+
+  segmentCounts: {
+    champion: number;
+    promising: number;
+    attention: number;
+  };
+}

@@ -10,6 +10,5 @@ router.get("/", (_req, res) => {
 });
 
 router.use("/stores", storeRoutes);
-router.use("/similarity", similarityRoutes);
-
+router.use("/similarity", similarityRoutes); 
 export default router;

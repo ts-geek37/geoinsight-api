@@ -7,8 +7,11 @@ import { buildFeatureVector } from "./featureBuilder";
 import { computeNormalizationStats, normalizeVector } from "./normalization";
 
 const MIN_SIMILARITY_PERCENT = 75;
-const MIN_POPULATION_3KM = 50000;
+const MIN_POPULATION_3KM = 50_000;
 const DEFAULT_LIMIT = 20;
+
+const POPULATION_NORMALIZER = 300_000;
+const DISTANCE_NORMALIZER = 8;
 
 export const findSimilarAreasForStore = async (
   storeId: string,
@@ -19,9 +22,7 @@ export const findSimilarAreasForStore = async (
   similarAreas: SimilarAreaResult[];
 }> => {
   const store = await getStoreById(storeId);
-  if (!store) {
-    throw new Error("Store not found");
-  }
+  if (!store) throw new Error("Store not found");
 
   const baseArea = await getNearestAreaProfile(
     store.latitude,
@@ -39,9 +40,8 @@ export const findSimilarAreasForStore = async (
         s.geom::geography
       ) / 1000 AS distance_km
     FROM area_profiles ap
-    CROSS JOIN stores s
-    WHERE s.id = $3
-      AND ap.id <> $1
+    JOIN stores s ON s.id = $3
+    WHERE ap.id <> $1
       AND (ap.population_3km IS NULL OR ap.population_3km >= $2)
       AND ST_Distance(
         s.geom::geography,
@@ -49,55 +49,59 @@ export const findSimilarAreasForStore = async (
       ) >= 2000;
   `;
 
-  const candidateRes = await query(candidateQuery, [
+  const { rows } = await query(candidateQuery, [
     baseArea.id,
     MIN_POPULATION_3KM,
     store.id,
   ]);
 
-  const candidateAreas = candidateRes.rows as (AreaProfile & {
-    distance_km: number;
-  })[];
-
-  if (!candidateAreas.length) {
+  if (rows.length === 0) {
     return { store, baseArea, similarAreas: [] };
   }
 
+  const candidateAreas = rows as (AreaProfile & {
+    distance_km: number;
+  })[];
+ 
   const baseVecRaw = buildFeatureVector(baseArea);
-  const candidateVecsRaw = candidateAreas.map(buildFeatureVector);
+
+  const candidateVecsRaw = new Array(candidateAreas.length);
+  for (let i = 0; i < candidateAreas.length; i++) {
+    candidateVecsRaw[i] = buildFeatureVector(candidateAreas[i]);
+  }
 
   const stats = computeNormalizationStats([
     baseVecRaw,
     ...candidateVecsRaw,
   ]);
+
   const baseVec = normalizeVector(baseVecRaw, stats);
 
   const results: SimilarAreaResult[] = [];
 
   for (let i = 0; i < candidateAreas.length; i++) {
     const area = candidateAreas[i];
-    const vec = normalizeVector(candidateVecsRaw[i], stats);
 
-    const sim01 = cosineSimilarity(baseVec, vec);
+    const population3km = area.population_3km ?? 0;
+    if (population3km < MIN_POPULATION_3KM) continue;
+
+    const vec = normalizeVector(candidateVecsRaw[i], stats);
     const similarityScore =
-      Math.round(sim01 * 100 * 100) / 100;
+      Math.round(cosineSimilarity(baseVec, vec) * 10_000) / 100;
 
     if (similarityScore < MIN_SIMILARITY_PERCENT) continue;
 
-    const population3km = Number(area.population_3km ?? 0);
-    if (population3km < MIN_POPULATION_3KM) continue;
+    const distanceKm = area.distance_km ?? 0;
 
-    const distanceKm = Number(area.distance_km ?? 0);
+    const populationFactor =
+      population3km >= POPULATION_NORMALIZER
+        ? 1
+        : population3km / POPULATION_NORMALIZER;
 
-    const populationFactor = Math.min(
-      population3km / 300_000,
-      1
-    );
-
-    const distanceFactor = Math.min(
-      distanceKm / 8,
-      1
-    );
+    const distanceFactor =
+      distanceKm >= DISTANCE_NORMALIZER
+        ? 1
+        : distanceKm / DISTANCE_NORMALIZER;
 
     const priorityScore =
       Math.round(
